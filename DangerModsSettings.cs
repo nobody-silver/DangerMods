@@ -20,6 +20,18 @@ public class DangerModsSettings : ISettings
         "volatile, ondeath, speed, proximal, explo, beacon, barrier, storm, immune"
     );
 
+    [Menu("Alert Display")]
+    public ToggleNode ShowAlertText { get; set; } = new ToggleNode(true);
+
+    [Menu("Display Position X", "Alert Display")]
+    public RangeNode<float> AlertPositionX { get; set; } = new RangeNode<float>(10f, 0f, 2000f);
+
+    [Menu("Display Position Y", "Alert Display")]
+    public RangeNode<float> AlertPositionY { get; set; } = new RangeNode<float>(10f, 0f, 2000f);
+
+    [Menu("Font", "Alert Display")]
+    public TextNode Font { get; set; } = new TextNode("FrizQuadrataITC:22");
+
     [Menu("Debug Messages")]
     public ToggleNode DebugMessages { get; set; } = new ToggleNode(false);
 
