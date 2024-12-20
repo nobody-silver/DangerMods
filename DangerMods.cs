@@ -9,6 +9,7 @@ using ExileCore2.Shared.Cache;
 using ExileCore2.Shared.Enums;
 using ExileCore2.Shared.Helpers;
 using System.Numerics;
+using System.IO;
 
 namespace DangerMods {
     public class DangerMods : BaseSettingsPlugin<DangerModsSettings> {
@@ -17,6 +18,8 @@ namespace DangerMods {
         private List<string> cachedAlertModifiers;
         private string lastModifierSettings = string.Empty;
         private Dictionary<Entity, List<string>> currentAlerts = new Dictionary<Entity, List<string>>();
+        private readonly HashSet<string> observedModifiers = new HashSet<string>();
+        private string ObservedModifiersPath => Path.Combine(DirectoryFullName, Settings.ObservedModifiersFile.Value);
 
         private List<string> GetAlertModifiers() {
             var currentSettings = Settings.ModifiersToAlert.Value;
@@ -39,27 +42,77 @@ namespace DangerMods {
             if (!Settings.Enable || !Settings.ShowAlertText)
                 return;
 
-            // Update current alerts
-            currentAlerts = currentAlerts
-                .Where(kvp => kvp.Key.IsValid && kvp.Key.IsAlive)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            // Always draw the fixed position alerts
+            DrawFixedPositionAlerts();
 
-            if (currentAlerts.Count == 0)
-                return;
+            // Additionally draw healthbar-anchored alerts if enabled
+            if (Settings.AnchorToHealthbar) {
+                DrawHealthbarAnchoredAlerts();
+            }
+        }
 
-            // Draw alerts in the configured position
-            var lineHeight = 25; // Fixed line height
+        private void DrawFixedPositionAlerts() {
+            var lineHeight = 25;
             var position = new Vector2(Settings.AlertPositionX, Settings.AlertPositionY);
             
             foreach (var alert in currentAlerts) {
-                var entity = alert.Key;
-                var mods = alert.Value;
-                
-                // Format text: EntityName: Mod1, Mod2, etc
-                var text = $"{entity.RenderName}: {string.Join(", ", mods)}";
-                
-                // Draw background box
+                // Format text with entity name and indented modifiers
+                var text = $"{alert.Key.RenderName}\n    {string.Join("\n    ", alert.Value)}";
                 var textSize = Graphics.MeasureText(text);
+                
+                Graphics.DrawBox(
+                    position,
+                    position + textSize,
+                    Color.FromArgb(180, 0, 0, 0)
+                );
+                
+                Graphics.DrawText(
+                    text,
+                    position,
+                    Color.Red,
+                    Settings.Font.Value,
+                    FontAlign.Left
+                );
+                
+                position.Y += textSize.Y + lineHeight;
+            }
+        }
+
+        private void DrawHealthbarAnchoredAlerts() {
+            foreach (var alert in currentAlerts.ToList()) {  // ToList to avoid modification during enumeration
+                var entity = alert.Key;
+                
+                // Skip if entity is dead
+                if (!entity.IsAlive) {
+                    currentAlerts.Remove(entity);
+                    alertedEntities.Remove(entity.Id);
+                    continue;
+                }
+                
+                // Get world coordinates
+                var worldCoords = entity.Pos;
+                
+                // Match HealthBars.cs Z-axis logic
+                if (entity.GetComponent<Render>()?.Bounds is { } boundsNum)
+                {
+                    worldCoords.Z -= 2 * boundsNum.Z;
+                }
+                worldCoords.Z += Settings.HealthBarYOffset;
+                
+                // Convert to screen coordinates
+                var screenCoords = GameController.IngameState.Camera.WorldToScreen(worldCoords);
+                if (screenCoords == Vector2.Zero) continue;
+
+                // Format text with entity name and indented modifiers
+                var text = $"{entity.RenderName}\n    {string.Join("\n    ", alert.Value)}";
+                var textSize = Graphics.MeasureText(text);
+                
+                var position = new Vector2(
+                    screenCoords.X - (textSize.X / 2),
+                    screenCoords.Y
+                );
+
+                // Draw background
                 Graphics.DrawBox(
                     position,
                     position + textSize,
@@ -74,8 +127,6 @@ namespace DangerMods {
                     Settings.Font.Value,
                     FontAlign.Left
                 );
-                
-                position.Y += lineHeight;
             }
         }
 
@@ -95,6 +146,25 @@ namespace DangerMods {
                 if (mods == null)
                     return;
 
+                // Track new modifiers if enabled
+                if (Settings.TrackModifiers) {
+                    bool newModifiersFound = false;
+                    foreach (var mod in mods) {
+                        var normalizedMod = mod.ToLower().Trim();
+                        if (observedModifiers.Add(normalizedMod)) {
+                            newModifiersFound = true;
+                            if (Settings.DebugMessages) {
+                                LogMessage($"New modifier found: {normalizedMod}");
+                            }
+                        }
+                    }
+                    
+                    if (newModifiersFound) {
+                        SaveObservedModifiers();
+                    }
+                }
+
+                // Existing alert logic
                 var alertModifiers = GetAlertModifiers();
                 var matchingMods = mods
                     .Where(mod => alertModifiers
@@ -129,6 +199,7 @@ namespace DangerMods {
         }
 
         public override bool Initialise() {
+            LoadObservedModifiers();
             Settings.PlayAlert.OnPressed += () => {
                 PlayAlertSound(ALERT_SOUND_FILE);
             };
@@ -140,6 +211,38 @@ namespace DangerMods {
         private void OnAreaChange(AreaInstance area) {
             alertedEntities.Clear();
             currentAlerts.Clear();
+        }
+
+        private void LoadObservedModifiers() {
+            try {
+                if (File.Exists(ObservedModifiersPath)) {
+                    var lines = File.ReadAllLines(ObservedModifiersPath);
+                    foreach (var line in lines) {
+                        if (!string.IsNullOrWhiteSpace(line)) {
+                            observedModifiers.Add(line.Trim().ToLower());
+                        }
+                    }
+                }
+            }
+            catch (Exception e) {
+                LogError($"Failed to load observed modifiers: {e.Message}");
+            }
+        }
+
+        private void SaveObservedModifiers() {
+            try {
+                File.WriteAllLines(ObservedModifiersPath, 
+                    observedModifiers.OrderBy(x => x).ToList());
+            }
+            catch (Exception e) {
+                LogError($"Failed to save observed modifiers: {e.Message}");
+            }
+        }
+
+        public override void EntityRemoved(Entity entity)
+        {
+            currentAlerts.Remove(entity);
+            alertedEntities.Remove(entity.Id);
         }
     }
 }

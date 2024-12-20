@@ -29,6 +29,9 @@ public class DangerModsSettings : ISettings
     [Menu("Display Position Y", "Alert Display")]
     public RangeNode<float> AlertPositionY { get; set; } = new RangeNode<float>(10f, 0f, 2000f);
 
+    [Menu("Y Offset from Health Bar", "Alert Display")]
+    public RangeNode<int> HealthBarYOffset { get; set; } = new RangeNode<int>(40, -100, 100);
+
     [Menu("Font", "Alert Display")]
     public TextNode Font { get; set; } = new TextNode("FrizQuadrataITC:22");
 
@@ -36,4 +39,12 @@ public class DangerModsSettings : ISettings
     public ToggleNode DebugMessages { get; set; } = new ToggleNode(false);
 
     public ButtonNode PlayAlert { get; set; } = new ButtonNode();
+
+    [Menu("Track Observed Modifiers")]
+    public ToggleNode TrackModifiers { get; set; } = new ToggleNode(true);
+
+    public TextNode ObservedModifiersFile { get; set; } = new TextNode("observed_modifiers.txt");
+
+    [Menu("Anchor to Healthbar", "Alert Display")]
+    public ToggleNode AnchorToHealthbar { get; set; } = new ToggleNode(false);
 }
