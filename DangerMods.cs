@@ -20,10 +20,15 @@ namespace DangerMods {
         private Dictionary<Entity, List<string>> currentAlerts = new Dictionary<Entity, List<string>>();
         private readonly HashSet<string> observedModifiers = new HashSet<string>();
         private string ObservedModifiersPath => Path.Combine(DirectoryFullName, Settings.ObservedModifiersFile.Value);
+        private DateTime lastSettingsCheck = DateTime.MinValue;
+        private const int SETTINGS_CHECK_DELAY_MS = 1500; // Half second delay
 
         private List<string> GetAlertModifiers() {
             var currentSettings = Settings.ModifiersToAlert.Value;
             if (cachedAlertModifiers == null || currentSettings != lastModifierSettings) {
+                if (Settings.DebugMessages) {
+                    LogMessage($"Parsing new modifiers: {currentSettings}");
+                }
                 cachedAlertModifiers = ParseAlertModifiers();
                 lastModifierSettings = currentSettings;
             }
@@ -202,6 +207,28 @@ namespace DangerMods {
             LoadObservedModifiers();
             Settings.PlayAlert.OnPressed += () => {
                 PlayAlertSound(ALERT_SOUND_FILE);
+            };
+            
+            // Add handler for modifier settings changes
+            Settings.ModifiersToAlert.OnValueChanged += () => {
+                // Check if enough time has passed since last update
+                var now = DateTime.Now;
+                if ((now - lastSettingsCheck).TotalMilliseconds < SETTINGS_CHECK_DELAY_MS) {
+                    return;
+                }
+                lastSettingsCheck = now;
+
+                if (Settings.DebugMessages) {
+                    LogMessage("ModifiersToAlert changed, refreshing caches...");
+                }
+                cachedAlertModifiers = null;     // Force refresh of cached modifiers
+                currentAlerts.Clear();           // Clear current alerts to force re-check
+                alertedEntities.Clear();         // Clear alerted entities to allow new alerts
+
+                // Re-check all existing entities
+                foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.Monster]) {
+                    EntityAdded(entity);
+                }
             };
 
             GameController.Area.OnAreaChange += OnAreaChange;
