@@ -65,7 +65,7 @@ The plugin will display alerts in this format:
 Monster Name
     Dangerous Modifier 1
     Dangerous Modifier 2
-    etc...
+    etc... 
 ```
 
 ## Tips
