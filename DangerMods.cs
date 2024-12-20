@@ -21,7 +21,7 @@ namespace DangerMods {
         private readonly HashSet<string> observedModifiers = new HashSet<string>();
         private string ObservedModifiersPath => Path.Combine(DirectoryFullName, Settings.ObservedModifiersFile.Value);
         private DateTime lastSettingsCheck = DateTime.MinValue;
-        private const int SETTINGS_CHECK_DELAY_MS = 1500; // Half second delay
+        private const int SETTINGS_CHECK_DELAY_MS = 5000; // Half second delay
 
         private List<string> GetAlertModifiers() {
             var currentSettings = Settings.ModifiersToAlert.Value;
