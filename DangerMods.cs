@@ -20,8 +20,8 @@ namespace DangerMods {
         private Dictionary<Entity, List<string>> currentAlerts = new Dictionary<Entity, List<string>>();
         private readonly HashSet<string> observedModifiers = new HashSet<string>();
         private string ObservedModifiersPath => Path.Combine(DirectoryFullName, Settings.ObservedModifiersFile.Value);
-        private DateTime lastSettingsCheck = DateTime.MinValue;
-        private const int SETTINGS_CHECK_DELAY_MS = 5000; // Half second delay
+        private DateTime lastSoundPlayed = DateTime.MinValue;
+        private const int SOUND_DELAY_MS = 1000; // One second delay between sounds
 
         private List<string> GetAlertModifiers() {
             var currentSettings = Settings.ModifiersToAlert.Value;
@@ -194,6 +194,13 @@ namespace DangerMods {
 
         private void PlayAlertSound(string name) {
             try {
+                // Check if enough time has passed since last sound
+                var now = DateTime.Now;
+                if ((now - lastSoundPlayed).TotalMilliseconds < SOUND_DELAY_MS) {
+                    return;
+                }
+                lastSoundPlayed = now;
+
                 GameController.SoundController.PreloadSound(name);
                 GameController.SoundController.SetVolume(Settings.Volume.Value / 100f);
                 GameController.SoundController.PlaySound(name);
@@ -211,13 +218,6 @@ namespace DangerMods {
             
             // Add handler for modifier settings changes
             Settings.ModifiersToAlert.OnValueChanged += () => {
-                // Check if enough time has passed since last update
-                var now = DateTime.Now;
-                if ((now - lastSettingsCheck).TotalMilliseconds < SETTINGS_CHECK_DELAY_MS) {
-                    return;
-                }
-                lastSettingsCheck = now;
-
                 if (Settings.DebugMessages) {
                     LogMessage("ModifiersToAlert changed, refreshing caches...");
                 }
